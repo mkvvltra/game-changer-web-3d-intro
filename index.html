@@ -29,8 +29,10 @@
         import * as THREE from 'three';
 
         const clock = new THREE.Clock();
+
         const walls = []
-        let camera, scene, renderer, mesh, delta
+        let camera, scene, renderer, delta
+        let playerMesh, playerBox
 
         let playerTargetY = -10
 
@@ -53,69 +55,124 @@
         }
 
         function animation( time ) {
-            delta = clock.getDelta();
+            const delta = clock.getDelta();
 
-            if(mesh){
-                mesh.rotation.x = time / 2000;
-                mesh.rotation.y = time / 1000;
-
-                mesh.position.y = lerp(mesh.position.y, playerTargetY, .1 * delta)
-            }
-
-            playerTargetY = lerp(playerTargetY, -10, .9 * delta)
-
-            walls.forEach(object => {
-                object.position.x = object.position.x - (.7 * delta)
-            })
+            movePlayer(delta, time)
+            moveWalls(delta)
+            handleCollisions()
 
             renderer.render(scene, camera);
         }
 
+        const createGeometryWithBoundingBox = ({
+            size,
+        }) => {
+            const { x, y, z } = size
 
-        function addPlayer() {
-            const geometry = new THREE.BoxGeometry( 0.2, 0.2, 0.2 );
-
+            const geometry = new THREE.BoxGeometry(x, y, z);
             const material = new THREE.MeshNormalMaterial();
-            mesh = new THREE.Mesh( geometry, material );
+            const mesh = new THREE.Mesh(geometry, material);
+            const box = new THREE.Box3();
 
-            mesh.position.x = -1
+            mesh.geometry.computeBoundingBox();
 
-            scene.add( mesh );
+            // box.copy( mesh.geometry.boundingBox ).applyMatrix4( mesh.matrixWorld );
 
-            const box = new THREE.BoxHelper( mesh, 0xffff00 );
-            scene.add( box );
+            return {
+                mesh,
+                box
+            }
         }
 
-        function addResizeListener() {
-            window.addEventListener( 'resize', onWindowResize, false );
+        const handleCollisions = () => {
+            walls.forEach(({
+               upperWallMesh,
+               bottomWallMesh,
+               upperWallBox,
+               bottomWallBox
+            }) => {
+               upperWallBox.copy(upperWallMesh.geometry.boundingBox).applyMatrix4(upperWallMesh.matrixWorld);
+               bottomWallBox.copy(bottomWallMesh.geometry.boundingBox).applyMatrix4(bottomWallMesh.matrixWorld);
+               playerBox.copy(playerMesh.geometry.boundingBox).applyMatrix4(playerMesh.matrixWorld);
 
-            function onWindowResize(){
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
+               console.log(playerBox.intersectsBox(upperWallBox), playerBox.intersectsBox(bottomWallBox))
+            })
+        }
+
+        const movePlayer = (delta, time) => {
+            if(playerMesh){
+                playerMesh.rotation.x = time / 2000;
+                playerMesh.rotation.y = time / 1000;
+
+                playerMesh.position.y = lerp(playerMesh.position.y, playerTargetY, .1 * delta)
             }
+
+            playerTargetY = lerp(playerTargetY, -10, .9 * delta)
+        }
+
+        const moveWalls = (delta) => {
+            walls.forEach(({
+                wallParent,
+                upperWallBox,
+                bottomWallBox
+            }) => {
+                wallParent.position.x = wallParent.position.x - (.7 * delta)
+            })
+        }
+
+        function addPlayer() {
+            const { mesh, box } = createGeometryWithBoundingBox({
+                size: {
+                    x: .2,
+                    y: .2,
+                    z: .2
+                }
+            })
+
+            mesh.position.x = -1
+            scene.add( mesh );
+
+            playerMesh = mesh
+            playerBox = box
         }
 
         function addWall() {
             const wallParent = new THREE.Object3D();
-            const geometry = new THREE.BoxGeometry( 0.2, 2, 0.2 );
 
-            const material = new THREE.MeshNormalMaterial();
+            const { mesh: upperWallMesh, box: upperWallBox } = createGeometryWithBoundingBox({
+                size: {
+                    x: .2,
+                    y: 2,
+                    z: .2
+                }
+            })
 
-            const upperWall = new THREE.Mesh(geometry, material);
-            const bottomWall = new THREE.Mesh(geometry, material);
+            upperWallMesh.position.x = 3
+            upperWallMesh.position.y = -1.5
+            wallParent.add(upperWallMesh)
 
-            upperWall.position.x = 3
-            upperWall.position.y = -1.5
-            wallParent.add(upperWall)
+            const { mesh: bottomWallMesh, box: bottomWallBox } = createGeometryWithBoundingBox({
+                size: {
+                    x: .2,
+                    y: 2,
+                    z: .2
+                }
+            })
 
-            bottomWall.position.x = 3
-            bottomWall.position.y = 1.5
-            wallParent.add(bottomWall)
+            bottomWallMesh.position.x = 3
+            bottomWallMesh.position.y = 1.5
+            wallParent.add(bottomWallMesh)
 
             wallParent.position.y = getRandomInt(-9,9)/10
 
-            walls.push(wallParent)
+            walls.push({
+                wallParent,
+                upperWallMesh,
+                bottomWallMesh,
+                upperWallBox,
+                bottomWallBox
+            })
+
             scene.add(wallParent);
 
             setTimeout(addWall, 2000)
@@ -133,6 +190,8 @@
             return Math.floor(Math.random() * (max - min) + min); // The maximum is exclusive and the minimum is inclusive
         }
 
+        // util
+
         window.test = () => {
             walls.forEach(object => {
                 const y = getRandomInt(-9,9)/10
@@ -142,7 +201,17 @@
         }
 
         window.jump = () => {
-            playerTargetY = mesh.position.y + 10
+            playerTargetY = playerMesh.position.y + 10
+        }
+
+        function addResizeListener() {
+            window.addEventListener( 'resize', onWindowResize, false );
+
+            function onWindowResize(){
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
         }
     </script>
 </head>
