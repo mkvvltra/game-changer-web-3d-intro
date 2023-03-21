@@ -28,38 +28,121 @@
     <script type="module">
         import * as THREE from 'three';
 
-        const camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 0.01, 10 );
+        const clock = new THREE.Clock();
+        const walls = []
+        let camera, scene, renderer, mesh, delta
 
-        camera.position.z = 1;
-        const scene = new THREE.Scene();
+        let playerTargetY = -10
 
-        const geometry = new THREE.BoxGeometry( 0.2, 0.2, 0.2 );
+        function lerp (start, end, val){
+            return (1-val)*start+val*end
+        }
 
-        const material = new THREE.MeshNormalMaterial();
-        const mesh = new THREE.Mesh( geometry, material );
+        function initScene() {
+            camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 0.01, 10 );
 
-        scene.add( mesh );
-        const renderer = new THREE.WebGLRenderer( { antialias: true } );
+            camera.position.z = 2;
+            scene = new THREE.Scene();
 
-        renderer.setSize( window.innerWidth, window.innerHeight );
-        renderer.setAnimationLoop( animation );
-        document.body.appendChild( renderer.domElement );
+            renderer = new THREE.WebGLRenderer( { antialias: true } );
+
+            renderer.setSize( window.innerWidth, window.innerHeight );
+
+            renderer.setAnimationLoop( animation );
+            document.body.appendChild( renderer.domElement );
+        }
 
         function animation( time ) {
-            mesh.rotation.x = time / 2000;
-            mesh.rotation.y = time / 1000;
+            delta = clock.getDelta();
+
+            if(mesh){
+                mesh.rotation.x = time / 2000;
+                mesh.rotation.y = time / 1000;
+
+                mesh.position.y = lerp(mesh.position.y, playerTargetY, .1 * delta)
+            }
+
+            playerTargetY = lerp(playerTargetY, -10, .9 * delta)
+
+            walls.forEach(object => {
+                object.position.x = object.position.x - (.7 * delta)
+            })
 
             renderer.render(scene, camera);
         }
 
-        window.addEventListener( 'resize', onWindowResize, false );
 
-        function onWindowResize(){
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
+        function addPlayer() {
+            const geometry = new THREE.BoxGeometry( 0.2, 0.2, 0.2 );
 
-            renderer.setSize( window.innerWidth, window.innerHeight );
+            const material = new THREE.MeshNormalMaterial();
+            mesh = new THREE.Mesh( geometry, material );
 
+            mesh.position.x = -1
+
+            scene.add( mesh );
+
+            const box = new THREE.BoxHelper( mesh, 0xffff00 );
+            scene.add( box );
+        }
+
+        function addResizeListener() {
+            window.addEventListener( 'resize', onWindowResize, false );
+
+            function onWindowResize(){
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+        }
+
+        function addWall() {
+            const wallParent = new THREE.Object3D();
+            const geometry = new THREE.BoxGeometry( 0.2, 2, 0.2 );
+
+            const material = new THREE.MeshNormalMaterial();
+
+            const upperWall = new THREE.Mesh(geometry, material);
+            const bottomWall = new THREE.Mesh(geometry, material);
+
+            upperWall.position.x = 3
+            upperWall.position.y = -1.5
+            wallParent.add(upperWall)
+
+            bottomWall.position.x = 3
+            bottomWall.position.y = 1.5
+            wallParent.add(bottomWall)
+
+            wallParent.position.y = getRandomInt(-9,9)/10
+
+            walls.push(wallParent)
+            scene.add(wallParent);
+
+            setTimeout(addWall, 2000)
+        }
+
+        initScene()
+        addPlayer()
+        addResizeListener()
+
+        addWall()
+
+        function getRandomInt(min, max) {
+            min = Math.ceil(min);
+            max = Math.floor(max);
+            return Math.floor(Math.random() * (max - min) + min); // The maximum is exclusive and the minimum is inclusive
+        }
+
+        window.test = () => {
+            walls.forEach(object => {
+                const y = getRandomInt(-9,9)/10
+                console.log(y)
+                object.position.y = y
+            })
+        }
+
+        window.jump = () => {
+            playerTargetY = mesh.position.y + 10
         }
     </script>
 </head>
