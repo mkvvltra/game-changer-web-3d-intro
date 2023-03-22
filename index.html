@@ -2,18 +2,30 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Game Changer 3D workshops</title>
+    <title>GameChanger web 3D workshops 🥦🔥☺️</title>
     <style>
         body {
             background-color: black;
             margin: 0;
         }
-        canvas {
+        #scoreCounter {
             position: fixed;
-            top: 0;
+            color: white;
+            pointer-events: none;
+            user-select: none;
+            padding: 12px;
+            font-size: 36px;
+            font-family: Arial;
+        }
+        #fpsCounter {
+            position: fixed;
             right: 0;
-            bottom: 0;
-            left: 0;
+            color: white;
+            pointer-events: none;
+            user-select: none;
+            padding: 12px;
+            font-size: 36px;
+            font-family: Arial;
         }
     </style>
     <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
@@ -28,55 +40,64 @@
     <script type="module">
         import * as THREE from 'three';
 
+        let camera, scene, renderer, walls = []
+        let playerMesh, playerBox, gameOver = false
+
         const clock = new THREE.Clock();
 
-        const walls = []
-        let camera, scene, renderer, delta
-        let playerMesh, playerBox
-
-        let playerTargetY = -10
-
-        function lerp (start, end, val){
-            return (1-val)*start+val*end
-        }
+        const playerTargetY = -10
+        const scoreDomElement = document.getElementById('scoreCounter')
+        const fpsDomElement = document.getElementById('fpsCounter')
+        let playerTargetYProxy = playerTargetY
 
         function initScene() {
             camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 0.01, 10 );
-
             camera.position.z = 2;
+
             scene = new THREE.Scene();
 
             renderer = new THREE.WebGLRenderer( { antialias: true } );
-
             renderer.setSize( window.innerWidth, window.innerHeight );
-
             renderer.setAnimationLoop( animation );
+
             document.body.appendChild( renderer.domElement );
         }
 
         function animation( time ) {
             const delta = clock.getDelta();
 
-            movePlayer(delta, time)
-            moveWalls(delta)
-            handleCollisions()
+            if(!gameOver){
+                movePlayer(delta, time)
+                moveWalls(delta)
+                updateScore(time)
+                updateFPS(delta)
+
+                if(time > 2000){ // ugly fix!
+                    handleCollisions()
+                }
+            }
 
             renderer.render(scene, camera);
         }
 
-        const createGeometryWithBoundingBox = ({
-            size,
-        }) => {
-            const { x, y, z } = size
-
-            const geometry = new THREE.BoxGeometry(x, y, z);
-            const material = new THREE.MeshNormalMaterial();
+        function createGeometryWithBoundingBox (size, position) {
+            const geometry = new THREE.BoxGeometry(size.x, size.y, size.z);
+            const material = new THREE.MeshNormalMaterial({
+                transparent: true,
+                opacity: .5
+            });
             const mesh = new THREE.Mesh(geometry, material);
+
+            mesh.position.x = position.x
+            mesh.position.y = position.y
+            mesh.position.z = position.z
+
             const box = new THREE.Box3();
 
             mesh.geometry.computeBoundingBox();
 
-            // box.copy( mesh.geometry.boundingBox ).applyMatrix4( mesh.matrixWorld );
+            const helper = new THREE.Box3Helper( box, 0xffff00 );
+            scene.add(helper);
 
             return {
                 mesh,
@@ -84,85 +105,62 @@
             }
         }
 
-        const handleCollisions = () => {
-            walls.forEach(({
-               upperWallMesh,
-               bottomWallMesh,
-               upperWallBox,
-               bottomWallBox
-            }) => {
-               upperWallBox.copy(upperWallMesh.geometry.boundingBox).applyMatrix4(upperWallMesh.matrixWorld);
-               bottomWallBox.copy(bottomWallMesh.geometry.boundingBox).applyMatrix4(bottomWallMesh.matrixWorld);
-               playerBox.copy(playerMesh.geometry.boundingBox).applyMatrix4(playerMesh.matrixWorld);
-
-               console.log(playerBox.intersectsBox(upperWallBox), playerBox.intersectsBox(bottomWallBox))
-            })
-        }
-
-        const movePlayer = (delta, time) => {
-            if(playerMesh){
-                playerMesh.rotation.x = time / 2000;
-                playerMesh.rotation.y = time / 1000;
-
-                playerMesh.position.y = lerp(playerMesh.position.y, playerTargetY, .1 * delta)
-            }
-
-            playerTargetY = lerp(playerTargetY, -10, .9 * delta)
-        }
-
-        const moveWalls = (delta) => {
-            walls.forEach(({
-                wallParent,
-                upperWallBox,
-                bottomWallBox
-            }) => {
-                wallParent.position.x = wallParent.position.x - (.7 * delta)
-            })
-        }
-
-        function addPlayer() {
+        function addPlayer () {
             const { mesh, box } = createGeometryWithBoundingBox({
-                size: {
-                    x: .2,
-                    y: .2,
-                    z: .2
-                }
+                x: .2,
+                y: .2,
+                z: .2
+            }, {
+                x: -1,
+                y: 0,
+                z: 0
             })
 
-            mesh.position.x = -1
             scene.add( mesh );
 
             playerMesh = mesh
             playerBox = box
         }
 
-        function addWall() {
+        function movePlayer (delta, time) {
+            if(playerMesh){
+                playerMesh.rotation.x = time / 2000;
+                playerMesh.rotation.y = time / 1000;
+
+                playerMesh.position.y = lerp(playerMesh.position.y, playerTargetYProxy, .1 * delta)
+            }
+
+            playerTargetYProxy = lerp(playerTargetYProxy, playerTargetY, .9 * delta)
+        }
+
+        function addWallsRecursively() {
             const wallParent = new THREE.Object3D();
 
             const { mesh: upperWallMesh, box: upperWallBox } = createGeometryWithBoundingBox({
-                size: {
-                    x: .2,
-                    y: 2,
-                    z: .2
-                }
+                x: .2,
+                y: 2,
+                z: .2,
+            }, {
+                x: 0,
+                y: -1.5,
+                z: 0
             })
 
-            upperWallMesh.position.x = 3
-            upperWallMesh.position.y = -1.5
             wallParent.add(upperWallMesh)
 
             const { mesh: bottomWallMesh, box: bottomWallBox } = createGeometryWithBoundingBox({
-                size: {
-                    x: .2,
-                    y: 2,
-                    z: .2
-                }
+                x: .2,
+                y: 2,
+                z: .2
+            }, {
+                x: 0,
+                y: 1.5,
+                z: 0
             })
 
-            bottomWallMesh.position.x = 3
-            bottomWallMesh.position.y = 1.5
             wallParent.add(bottomWallMesh)
 
+            wallParent.position.x = 3
             wallParent.position.y = getRandomInt(-9,9)/10
 
             walls.push({
@@ -175,14 +173,62 @@
 
             scene.add(wallParent);
 
-            setTimeout(addWall, 2000)
+            if(!gameOver){
+                setTimeout(addWallsRecursively, 2000)
+            }
+        }
+
+        function moveWalls(delta) {
+            walls.forEach(({
+                wallParent,
+            }) => {
+                wallParent.position.x = wallParent.position.x - (.7 * delta)
+            })
+        }
+
+        function handleCollisions () {
+            walls.forEach(({
+               upperWallMesh,
+               bottomWallMesh,
+               upperWallBox,
+               bottomWallBox
+           }) => {
+               upperWallBox.copy(upperWallMesh.geometry.boundingBox).applyMatrix4(upperWallMesh.matrixWorld);
+               bottomWallBox.copy(bottomWallMesh.geometry.boundingBox).applyMatrix4(bottomWallMesh.matrixWorld);
+
+               playerBox.copy(playerMesh.geometry.boundingBox).applyMatrix4(playerMesh.matrixWorld);
+               playerBox.expandByScalar(-.05)
+
+               if(playerBox.intersectsBox(upperWallBox) || playerBox.intersectsBox(bottomWallBox)){
+                   gameOver = true
+               }
+           })
+        }
+
+        function addPlayerControls() {
+            window.addEventListener("click", function() {
+                playerTargetYProxy = playerMesh.position.y + 10
+            });
+        }
+
+        function updateScore(time) {
+            scoreDomElement.textContent = `score🔥️: ${time}`
+        }
+
+        function updateFPS(delta) {
+            fpsDomElement.textContent = `🤩FPS: ${`${1000 / delta}`.slice(0,2)}`
         }
 
         initScene()
         addPlayer()
-        addResizeListener()
+        addWallsRecursively()
+        addPlayerControls()
+        addWindowResizeListener()
 
-        addWall()
+        // utility functions
+        function lerp (start, end, val){
+            return (1-val)*start+val*end
+        }
 
         function getRandomInt(min, max) {
             min = Math.ceil(min);
@@ -190,32 +236,17 @@
             return Math.floor(Math.random() * (max - min) + min); // The maximum is exclusive and the minimum is inclusive
         }
 
-        // util
-
-        window.test = () => {
-            walls.forEach(object => {
-                const y = getRandomInt(-9,9)/10
-                console.log(y)
-                object.position.y = y
-            })
-        }
-
-        window.jump = () => {
-            playerTargetY = playerMesh.position.y + 10
-        }
-
-        function addResizeListener() {
-            window.addEventListener( 'resize', onWindowResize, false );
-
-            function onWindowResize(){
+        function addWindowResizeListener () {
+            window.addEventListener('resize', () => {
                 camera.aspect = window.innerWidth / window.innerHeight;
                 camera.updateProjectionMatrix();
                 renderer.setSize(window.innerWidth, window.innerHeight);
-            }
+            }, false);
         }
     </script>
 </head>
 <body>
-<canvas id="canvas"></canvas>
+    <div id="scoreCounter">score🔥️: 1337</div>
+    <div id="fpsCounter">🤩FPS: 420</div>
 </body>
 </html>
